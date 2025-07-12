@@ -1,2 +1,2 @@
-# ReWear
+# Skill-Swap
 Swap your fashion
