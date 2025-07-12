@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  password    String
+  location    String?
+  profilePic  String?
+  availability String[]
+  isPublic    Boolean  @default(true)
+  skillsOffered Skill[] @relation("SkillsOffered")
+  skillsWanted Skill[] @relation("SkillsWanted")
+  sentRequests    SwapRequest[] @relation("SentRequests")
+  receivedRequests SwapRequest[] @relation("ReceivedRequests")
+  feedbacksGiven    Feedback[] @relation("FeedbackGiven")
+  feedbacksReceived Feedback[] @relation("UserFeedback")
+  skillPosts        SkillPost[]
+  hostedSessions    LearningSession[] @relation("SessionHost")
+  sessionParticipants SessionParticipant[]
+  uploadedResources  Resource[]
+  resourceComments   ResourceComment[]
+  sessionComments    SessionComment[]
+  certificationsGiven    Certification[] @relation("CertificationEndorser")
+  certificationsReceived Certification[] @relation("CertificationEndorsed")
+  isBanned     Boolean  @default(false)
+  role         Role     @default(USER)
+}
+
+model Skill {
+  id     String  @id @default(uuid())
+  name   String
+  offeredByUserId String?
+  wantedByUserId String?
+  type   SkillType
+  offeredBy User? @relation("SkillsOffered", fields: [offeredByUserId], references: [id])
+  wantedBy User? @relation("SkillsWanted", fields: [wantedByUserId], references: [id])
+}
+
+enum SkillType {
+  OFFERED
+  WANTED
+}
+
+model SwapRequest {
+  id         String   @id @default(uuid())
+  fromUser   User     @relation("SentRequests", fields: [fromUserId], references: [id])
+  fromUserId String
+  toUser     User     @relation("ReceivedRequests", fields: [toUserId], references: [id])
+  toUserId   String
+  status     SwapStatus @default(PENDING)
+  learningSessions LearningSession[]
+  certifications   Certification[]
+  createdAt  DateTime @default(now())
+}
+
+enum SwapStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model Feedback {
+  id         String   @id @default(uuid())
+  rating     Int
+  comment    String?
+  fromUser   User     @relation("FeedbackGiven", fields: [fromUserId], references: [id])
+  fromUserId String
+  toUser     User     @relation("UserFeedback", fields: [toUserId], references: [id])
+  toUserId   String
+  createdAt  DateTime @default(now())
+}
+
+model SkillPost {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  skillName   String
+  description String?
+  postType    PostType
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum PostType {
+  OFFERING
+  SEEKING
+}
+
+model LearningSession {
+  id              String   @id @default(uuid())
+  title           String
+  description     String
+  skillName       String
+  sessionType     SessionType
+  maxParticipants Int      @default(10)
+  scheduledDate   DateTime?
+  status          SessionStatus @default(SCHEDULED)
+  isPrivate       Boolean  @default(false)
+  swapRequestId   String?
+  swapRequest     SwapRequest? @relation(fields: [swapRequestId], references: [id])
+  hostId          String
+  host            User     @relation("SessionHost", fields: [hostId], references: [id])
+  participants    SessionParticipant[]
+  resources       Resource[]
+  comments        SessionComment[]
+  certifications  Certification[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SessionParticipant {
+  id        String   @id @default(uuid())
+  sessionId String
+  userId    String
+  session   LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([sessionId, userId])
+}
+
+model Resource {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  uploadedBy  String
+  uploadedByUser User  @relation(fields: [uploadedBy], references: [id])
+  title       String
+  description String?
+  resourceType ResourceType
+  content     String? // For code snippets
+  fileUrl     String? // For uploaded files
+  comments    ResourceComment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ResourceComment {
+  id         String   @id @default(uuid())
+  resourceId String
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model SessionComment {
+  id         String   @id @default(uuid())
+  sessionId  String
+  session    LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+enum SessionType {
+  LIVE
+  RECORDED
+  WORKSHOP
+}
+
+model Certification {
+  id              String   @id @default(uuid())
+  sessionId       String
+  session         LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  swapRequestId   String
+  swapRequest     SwapRequest @relation(fields: [swapRequestId], references: [id], onDelete: Cascade)
+  endorsedBy      String
+  endorsedUser    User     @relation("CertificationEndorser", fields: [endorsedBy], references: [id])
+  endorsedFor     String
+  endorsedForUser User     @relation("CertificationEndorsed", fields: [endorsedFor], references: [id])
+  skillName       String
+  endorsementText String?
+  rating          Int      @default(5)
+  isCompleted     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
+
+enum SessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ResourceType {
+  CODE
+  IMAGE
+  VIDEO
+  DOCUMENT
+  LINK
+}
+
+enum Role {
+  USER
+  ADMIN
+}
